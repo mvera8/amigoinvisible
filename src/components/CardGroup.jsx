@@ -1,4 +1,5 @@
 import { Badge, Button, Card, Group, Text } from '@mantine/core'
+import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
 
 export const CardGroup = ({ grupo }) => {
@@ -10,13 +11,18 @@ export const CardGroup = ({ grupo }) => {
 				</Text>
 				<Badge variant="dot" color={grupo.status == 'open' ? "green" : 'red'}>{grupo.status == 'open' ? 'Abierto' : 'Cerrado'}</Badge>
       </Group>
-			<Button color="blue" fullWidth mt="md" radius="md">
-        Ver grupo
-      </Button>
+			<Button
+				component={Link}
+				to={`/${grupo.$id}`}
+				>Ver Grupo</Button>
 		</Card>
 	)
 }
 
 CardGroup.propTypes = {
-	grupo: PropTypes.node,
+  grupo: PropTypes.shape({
+    $id: PropTypes.string,
+    name: PropTypes.string,
+    status: PropTypes.string,
+  }).isRequired,
 };

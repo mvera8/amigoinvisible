@@ -8,7 +8,7 @@ export const ProfilePage = () => {
 	return (
 		<>
 			<Navbar />
-			<Container>
+			<Container size="xs" pt="xl">
 				<Title order={2}>Perfil</Title>
 
 				<List mt="md">

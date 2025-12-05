@@ -1,4 +1,4 @@
-import { Button, Container, Title } from "@mantine/core";
+import { Button, Card, Container, Title } from "@mantine/core";
 import { useAuthContext } from "../context/AuthContext";
 import { Navbar } from "../components/Navbar";
 import { Each } from "../components/Each";
@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { databases } from "../lib/appwrite";
 import { Query } from "appwrite"; // Importa Query
 import { CardGroup } from "../components/CardGroup";
+import { Link } from "react-router-dom";
 
 const documentDb = import.meta.env.VITE_APPWRITE_DATABSE;
 
@@ -51,7 +52,7 @@ export const HomePage = () => {
 						Query.equal('userId', user.$id)
 					]
 				);
-				console.log('donde participo', result);
+				// console.log('donde participo', result);
 				setUserParticipantGroups(result.documents);
 			} catch (error) {
 				console.error('Error al obtener grupos participantes:', error);
@@ -64,14 +65,24 @@ export const HomePage = () => {
   return (
     <>
 			<Navbar />
-			<Container>
+			<Container pt="xl">
 				{user ? (
 					<>
-						<Title order={2}>Hola {user.name}</Title>
+						<Title order={2}>Hola {user.name || user.email}</Title>
+
+						{userParticipantGroups.length === 0 &&
+							<Card shadow="sm" padding="md" radius="md" withBorder>
+								<Title order={3}>Crear tu primer grupo</Title>
+
+								<Button
+									component={Link}
+									to={`/create`}>Crear Grupo</Button>
+							</Card>
+						}
 
 						{userCreatedGroups.length > 0 &&
 							<>
-								<Title order={3}>Grupos Creados por Mi</Title>
+								<Title order={3} mt="lg" mb="xs">Grupos Creados por Mi</Title>
 
 								<Each of={userCreatedGroups} render={(item) => (
 									<CardGroup key={item.$id} grupo={item} />
@@ -79,9 +90,9 @@ export const HomePage = () => {
 							</>
 						}
 
-						{userCreatedGroups.length > 0 &&
+						{userParticipantGroups.length > 0 &&
 							<>
-								<Title order={3}>Grupos donde participo</Title>
+								<Title order={3} mt="lg" mb="xs">Grupos donde participo</Title>
 
 								<Each of={userParticipantGroups} render={(item) => (
 									<CardGroup key={item.$id} grupo={item.amigoinvisibleGrupo} />
@@ -91,8 +102,7 @@ export const HomePage = () => {
 					</>
 				) : (
 					<>
-						<Button component="a" href="/login">Login</Button>
-						<Button component="a" href="/register">Register</Button>
+						No logueado
 					</>
 				)}
 			</Container>
