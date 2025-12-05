@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { useAuthContext } from "../context/AuthContext";
-import { ID } from "appwrite";
-import { databases } from "../lib/appwrite";
 import { Navbar } from "../components/Navbar";
 import { Button, CloseButton, Container, TextInput, Title } from "@mantine/core";
-
-const databaseId = import.meta.env.VITE_APPWRITE_DATABSE;
+import { create, remove } from '../lib/appwrite-helpers';
 
 export const CrearGrupoPage = () => {
   const { user } = useAuthContext();
@@ -23,62 +20,45 @@ export const CrearGrupoPage = () => {
 
 		try {
 			// 1. Crear el grupo
-			const groupData = {
-				name: nombre,
-				ownerId: user.$id,
-			};
-
-			const groupResponse = await databases.createDocument(
-				databaseId,
+			const grupoResult = await create(
 				import.meta.env.VITE_APPWRITE_TABLE_GRUPO,
-				ID.unique(),
-				groupData
+				{
+					name: nombre,
+					ownerId: user.$id,
+				}
 			);
 
-			if (!groupResponse || !groupResponse.$id) {
-				throw new Error('No se pudo crear el grupo');
+			if (!grupoResult.success) {
+				throw new Error(grupoResult.error || 'No se pudo crear el grupo');
 			}
 
-			console.log('Grupo creado:', groupResponse);
+			const grupoId = grupoResult.data.$id;
+			console.log('Grupo creado:', grupoResult.data);
 
 			// 2. Agregar al creador como participante
-			const participantData = {
-				amigoinvisibleGrupo: groupResponse.$id,
-				userId: user.$id,
-				name: user.name || '',
-				email: user.email,
-			};
-
-			try {
-				const participantResponse = await databases.createDocument(
-					databaseId,
-					import.meta.env.VITE_APPWRITE_TABLE_PARTICIPANTE,
-					ID.unique(),
-					participantData
-				);
-
-				console.log('Participante agregado:', participantResponse);
-				
-				// 3. Redirigir al home solo si todo salió bien
-				window.location.href = "/";
-				
-			} catch (participantError) {
-				// Si falla agregar participante, eliminar el grupo creado
-				console.error('Error al agregar participante, eliminando grupo...', participantError);
-				
-				try {
-					await databases.deleteDocument(
-						databaseId,
-						import.meta.env.VITE_APPWRITE_TABLE_GRUPO,
-						groupResponse.$id
-					);
-					console.log('Grupo eliminado exitosamente');
-				} catch (deleteError) {
-					console.error('Error al eliminar grupo:', deleteError);
+			const participanteResult = await create(
+				import.meta.env.VITE_APPWRITE_TABLE_PARTICIPANTE,
+				{
+					amigoinvisibleGrupo: grupoId,
+					userId: user.$id,
+					name: user.name || '',
+					email: user.email,
+					status: 'in'
 				}
-				
+			);
+
+			if (!participanteResult.success) {
+				// Rollback: eliminar el grupo
+				console.error('Error al agregar participante, eliminando grupo...');
+				await remove(
+					import.meta.env.VITE_APPWRITE_TABLE_GRUPO,
+					grupoId
+				);
 				throw new Error('No se pudo agregar como participante. El grupo no fue creado.');
 			}
+
+			console.log('Participante agregado:', participanteResult.data);
+			window.location.href = "/";
 
 		} catch (error) {
 			console.error('Error al crear grupo:', error);
