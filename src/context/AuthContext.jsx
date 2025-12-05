@@ -1,13 +1,14 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useLocalStorage } from "@mantine/hooks";
 import { account } from "../lib/appwrite";
+import { STORAGE_KEYS } from "../constants/storageKeys";
 import PropTypes from "prop-types";
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useLocalStorage({
-    key: "amigoinvisible_user",
+    key: STORAGE_KEYS.LOCALSTORAGE_USER,
     defaultValue: undefined,
   });
 

@@ -1,5 +1,6 @@
 import { Button, Container, Group, Title, Tooltip } from '@mantine/core'
 import { useAuthContext } from '../context/AuthContext';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export const Navbar = () => {
 	const { user, logout } = useAuthContext();
@@ -7,7 +8,7 @@ export const Navbar = () => {
 	return (
 		<Container py="sm">
 			<Group justify="space-between">
-				<Title order={1}>Amistiky</Title>
+				<Title order={1}>{STORAGE_KEYS.SITE_NAME}</Title>
 			
 				<Button.Group>
 					<Button component="a" href="/">Incio</Button>
