@@ -39,9 +39,7 @@ const router = createBrowserRouter([
   {
     path: ":groupId",
     element: (
-      <ProtectedRoute>
-        <GrupoPage />
-      </ProtectedRoute>
+      <GrupoPage />
     ),
   },
   {

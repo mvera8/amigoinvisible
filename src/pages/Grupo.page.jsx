@@ -1,21 +1,37 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Each } from '../components/Each';
-import { ActionIcon, Avatar, Button, Container, Divider, Flex, Group, Kbd, List, Paper, SimpleGrid, Skeleton, Tabs, Text, Title } from '@mantine/core';
-import { useAuthContext } from '../context/AuthContext';
+import { ActionIcon, Button, Container, Flex, Group, Kbd, List, Skeleton, Table, Text, TextInput, Title } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { get, list, create, remove } from '../lib/appwrite-helpers';
+import { create, get, list, remove } from '../lib/appwrite-helpers';
 import { Query } from 'appwrite';
 import { STORAGE_KEYS } from '../constants/storageKeys';
-import { IconChevronLeft, IconGift, IconGiftOff, IconUser, IconUserOff } from '@tabler/icons-react';
+import { IconChevronLeft } from '@tabler/icons-react';
+import { hasLength, isEmail, useForm } from '@mantine/form';
+import { useLocalStorage } from '@mantine/hooks';
+import { useAuthContext } from '../context/AuthContext';
 
 export const GrupoPage = () => {
 	const { user } = useAuthContext();
 	const { groupId } = useParams();
 	const navigate = useNavigate();
 	const [groupInformation, setGroupInformation] = useState(null);
-	const [groupParticipants, setGroupParticipants] = useState(null);
+	const [groupParticipants, setGroupParticipants] = useState([]);
 	const [groupOwner, setGroupOwner] = useState(false);
+	const [groupGuests, setGroupGuests] = useLocalStorage({
+		key: STORAGE_KEYS.LOCALSTORAGE_GUEST,
+		defaultValue: [],
+	});
+
+	// Add guests
+	const form = useForm({
+    mode: 'controlled',
+    initialValues: { name: '', email: '' },
+    validate: {
+      name: hasLength({ min: 3 }, 'Debe tener al menos 3 caracteres.'),
+      email: isEmail('Correo electrónico no válido'),
+    },
+  });
 
 	// Obtener grupo info y participantes
 	useEffect(() => {
@@ -30,8 +46,6 @@ export const GrupoPage = () => {
 					console.log('Cargando desde cache...');
 					setGroupInformation(cachedData.grupo);
 					setGroupParticipants(cachedData.participantes);
-					// Verificar ownership desde el cache
-					setGroupOwner(cachedData.grupo.ownerId === user.$id);
 				}
 
 				// Luego hacer fetch de datos actualizados
@@ -42,18 +56,17 @@ export const GrupoPage = () => {
 
 				if (grupoResult.success) {
 					setGroupInformation(grupoResult.data);
-					// Verificar si el usuario es el owner
-					setGroupOwner(grupoResult.data.ownerId === user.$id);
 				} else {
 					console.error('Error al obtener grupo:', grupoResult.error);
 				}
 
 				const participantesResult = await list(
 					import.meta.env.VITE_APPWRITE_TABLE_PARTICIPANTE,
-					[Query.equal('amigoinvisibleGrupo', groupId)]
+					[Query.equal('amigoinvisibleGrupo', groupId),]
 				);
 
 				if (participantesResult.success) {
+					// console.log('participantesResult', participantesResult);
 					setGroupParticipants(participantesResult.data.documents);
 
 					// Solo guardar si es un grupo diferente al que está en cache
@@ -76,38 +89,30 @@ export const GrupoPage = () => {
 		};
 
 		fetchGroupInformation();
-	}, [groupId, user.$id]);
+	}, [groupId]);
 
-	const isUserInGroup = groupParticipants?.some(p => p.userId === user.$id);
-
-	const handleAskJoin = async () => {
-		try {
-			const participantData = {
-				amigoinvisibleGrupo: groupId,
-				userId: user.$id,
-				name: user.name || '',
-				email: user.email,
-			};
-
-			const result = await create(
-				import.meta.env.VITE_APPWRITE_TABLE_PARTICIPANTE,
-				participantData
-			);
-
-			if (result.success) {
-				console.log('Participante agregado:', result.data);
-				
-				// Limpiar cache para forzar recarga
-				localStorage.removeItem(STORAGE_KEYS.LOCALSTORAGE_GRUPO);
-				
-				navigate(0); // Recargar la página
-			} else {
-				console.error('Error al unirse al grupo:', result.error);
-			}
-
-		} catch (error) {
-			console.error('Error:', error);
+	useEffect(() => {
+		if (!user || !groupInformation) {
+			setGroupOwner(false);
+			return;
 		}
+
+		setGroupOwner(groupInformation.ownerId === user.$id);
+	}, [user, groupInformation]);
+
+	const handleAppendGuest = async (values) => {		
+		// Crear un nuevo guest con los valores del formulario
+		const newGuest = {
+			name: values.name,
+			email: values.email,
+		};
+		
+		// Agregar el nuevo guest al array existente
+		const updatedGuests = [...groupGuests, newGuest];
+		setGroupGuests(updatedGuests);
+		
+		// Resetear el formulario
+		form.reset();
 	};
 
 	const handleDeleteGroup = async () => {
@@ -161,6 +166,55 @@ export const GrupoPage = () => {
 		}
 	};
 
+	const handleSendInvitations = async () => {
+		console.log('handleSendInvitations');
+
+		if (groupGuests.length === 0) {
+			alert('No hay invitados para enviar');
+			return;
+		}
+
+		try {
+			// Recorrer cada guest y crear un participante
+			for (const guest of groupGuests) {
+				const participantData = {
+					amigoinvisibleGrupo: groupId,
+					name: guest.name,
+					email: guest.email,
+				};
+
+				const result = await create(
+					import.meta.env.VITE_APPWRITE_TABLE_PARTICIPANTE,
+					participantData
+				);
+
+				if (result.success) {
+					console.log('Participante agregado:', result.data);
+				} else {
+					console.error('Error al agregar participante:', result.error);
+					alert(`Error al agregar a ${guest.name}`);
+					return; // Detener si hay un error
+				}
+			}
+
+			// Si todo salió bien, limpiar y recargar
+			alert('¡Invitaciones enviadas exitosamente!');
+			
+			// Limpiar cache para forzar recarga
+			localStorage.removeItem(STORAGE_KEYS.LOCALSTORAGE_GRUPO);
+			localStorage.removeItem(STORAGE_KEYS.LOCALSTORAGE_GUEST);
+			
+			// Limpiar el estado de guests
+			setGroupGuests([]);
+			
+			// Recargar la página para mostrar los nuevos participantes
+			navigate(0);
+		} catch (error) {
+			console.error('Error:', error);
+			alert('Hubo un error al enviar las invitaciones');
+		}
+	};
+
 	return (
 		<>
 			<Navbar />
@@ -179,21 +233,21 @@ export const GrupoPage = () => {
 
 						{!groupInformation
 							? <Skeleton height={8} width={150} />
-							: <Title order={2} tt="capitalize">
-								{groupInformation.name || 'Sin nombre'}
-								<Kbd ml="sm">{groupInformation.$id}</Kbd>
-							</Title>
+							: <Flex
+								gap="sm"
+								justify="flex-start"
+								align="center"
+								direction="row"
+								wrap="wrap"
+							>
+								<Title order={2} tt="capitalize">{groupInformation.name || 'Sin nombre'}</Title>
+								<Kbd>{groupInformation.$id}</Kbd>
+							</Flex>
 						}
 					</Flex>
 
 					{groupOwner && (
 						<Button.Group>
-							<Button
-								color="green"
-								onClick={handleDeleteGroup}>
-								Cerrar grupo
-							</Button>
-
 							<Button
 								color="red"
 								onClick={handleDeleteGroup}>
@@ -205,15 +259,7 @@ export const GrupoPage = () => {
 
 				{groupInformation &&
 					<>
-						<Title order={3} mt="lg" mb="xs">Información</Title>
-
 						<List mt="md">
-							<List.Item>
-								<Text span fw={700}>ID:</Text> {groupInformation.$id}
-							</List.Item>
-							<List.Item>
-								<Text span fw={700}>Status:</Text> {groupInformation.status}
-							</List.Item>
 							<List.Item>
 								<Text span fw={700}>Eres el owner:</Text> {groupOwner ? 'Sí' : 'No'}
 							</List.Item>
@@ -221,70 +267,59 @@ export const GrupoPage = () => {
 					</>
 				}
 
-				{isUserInGroup && groupParticipants?.length > 0
-					? 
-						<>
-							<Tabs defaultValue="participants">
-								<Tabs.List>
-									<Tabs.Tab value="participants">
-										Participantes
-									</Tabs.Tab>
-									<Tabs.Tab value="invite">
-										Invitar
-									</Tabs.Tab>
-									<Tabs.Tab value="share">
-										Compartir
-									</Tabs.Tab>
-								</Tabs.List>
+				{groupOwner && (
+					<>
+						<form onSubmit={form.onSubmit(handleAppendGuest)}>
+							<TextInput {...form.getInputProps('name')} label="Name" placeholder="Name" />
+							<TextInput {...form.getInputProps('email')} mt="md" label="Email" placeholder="Email" />
+							<Button type="submit" mt="md">Agregar</Button>
+						</form>
 
-								<Tabs.Panel value="participants">
-									<SimpleGrid cols={4}>
-										<Each of={groupParticipants} render={(item) => (
-											<Paper key={item.$id} radius="md" withBorder p="lg" bg="var(--mantine-color-body)">
-												<Avatar color="cyan" radius="xl" size="lg" mx="auto" name={item.name} />
-												<Text ta="center" fz="lg" fw={500} mt="md">
-													{item.name}
-												</Text>
-												<Text ta="center" c="dimmed" fz="sm">
-													{item.email}
-												</Text>
-												<Avatar color="blue" radius="sm">
-													<IconGift size={20} />
-												</Avatar>
-												<Avatar color="blue" radius="sm">
-													<IconGiftOff size={20} />
-												</Avatar>
-												<Avatar color="blue" radius="sm">
-													<IconUserOff size={20} />
-												</Avatar>
-												<Avatar color="blue" radius="sm">
-													<IconUser size={20} />
-												</Avatar>
-											</Paper>
-										)} />
-									</SimpleGrid>
-								</Tabs.Panel>
+						<Table mb="md">
+						<Table.Thead>
+							<Table.Tr>
+								<Table.Th>Nombre</Table.Th>
+								<Table.Th>Email</Table.Th>
+								<Table.Th>Invitados</Table.Th>
+								<Table.Th>Acciones</Table.Th>
+							</Table.Tr>
+						</Table.Thead>
+						<Table.Tbody>
+							
 
-								<Tabs.Panel value="invite">
-									Invitar tab content
-								</Tabs.Panel>
+							<Each of={groupGuests} render={(item) => (
+								<Table.Tr key={item.$id}>
+									<Table.Td>{item.name}</Table.Td>
+									<Table.Td>{item.email}</Table.Td>
+									<Table.Td>No</Table.Td>
+									<Table.Td>#</Table.Td>
+								</Table.Tr>
+							)} />
 
-								<Tabs.Panel value="share">
-									Compartir tab content
-								</Tabs.Panel>
-							</Tabs>
+								<Each of={groupParticipants} render={(item) => (
+									<Table.Tr key={item.$id}>
+										<Table.Td>{item.owner && '⭐'} {item.name}</Table.Td>
+										<Table.Td>{item.email}</Table.Td>
+										<Table.Td>Si</Table.Td>
+									</Table.Tr>
+								)} />
+							</Table.Tbody>
+						</Table>
+
+						<Button
+							color="green"
+							size="lg"
+							onClick={handleSendInvitations}>
+							Enviar Invitaciones
+						</Button>
+
 						</>
-					:
-						<>
-							<Divider my="xl" />
-							<Text>No estás en el grupo</Text>
-							<Button
-								mb="md"
-								onClick={handleAskJoin}>
-								Pedir Unirse
-							</Button>
-						</>
-				}
+				)}
+
+				
+				
+
+				
 			</Container>
 		</>
 	)

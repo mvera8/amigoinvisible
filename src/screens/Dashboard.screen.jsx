@@ -9,10 +9,8 @@ import { CardGroup, Each } from '../components';
 
 export const DashboardScreen = () => {
 	const { user } = useAuthContext();
-
 	const [loading, setLoading] = useState(true);
 	const [userGroups, setUserGroups] = useState([]);
-	const [userParticipations, setUserParticipations] = useState([]);
 
 	useEffect(() => {
 		if (!user) return;
@@ -21,19 +19,14 @@ export const DashboardScreen = () => {
 			try {
 				setLoading(true);
 
-				const [created, participations] = await Promise.all([
-					list(import.meta.env.VITE_APPWRITE_TABLE_GRUPO, [
-						Query.equal("ownerId", user.$id),
-					]),
-					list(import.meta.env.VITE_APPWRITE_TABLE_PARTICIPANTE, [
-						Query.equal("userId", user.$id),
-					]),
-				]);
+				const created = await list(
+					import.meta.env.VITE_APPWRITE_TABLE_GRUPO,
+					[Query.equal('ownerId', user.$id)]
+				);
 
-				if (created.success) setUserGroups(created.data.documents);
-				if (participations.success)
-					setUserParticipations(participations.data.documents);
-
+				if (created.success) {
+					setUserGroups(created.data.documents)
+				}
 			} catch (err) {
 				console.error("Error en Dashboard:", err);
 			} finally {
@@ -83,16 +76,6 @@ export const DashboardScreen = () => {
 					<Title order={3} mt="lg" mb="xs">Grupos Creados por Mi</Title>
 					<Each of={userGroups} render={(g) => (
 						<CardGroup key={g.$id} grupo={g} />
-					)} />
-				</>
-			)}
-
-			{/* GRUPOS DONDE PARTICIPA */}
-			{!loading && userParticipations.length > 0 && (
-				<>
-					<Title order={3} mt="lg" mb="xs">Grupos donde participo</Title>
-					<Each of={userParticipations} render={(p) => (
-						<CardGroup key={p.$id} grupo={p.amigoinvisibleGrupo} />
 					)} />
 				</>
 			)}
